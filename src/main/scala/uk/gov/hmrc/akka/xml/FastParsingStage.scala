@@ -123,24 +123,23 @@ object FastParsingStage {
               parsingData = ByteString(incompleteBytes.toArray) ++ incomingData
               incompleteBytes.clear()
               advanceParser()
+
               push(out, (ByteString(streamBuffer.toArray), getCompletedXMLElements(xmlElements).toSet))
+
               streamBuffer.clear()
 
-              val isMaxPasingSizeReached = totalProcessedLength > maxParsingSize
-              if (isMaxPasingSizeReached) { //Stop parsing when the max parsing size was reached
-                continueParsing = false
-                parser.getInputFeeder.endOfInput()
-                if (instructions.collect { case v: XMLValidate => v }.exists(!completedInstructions.contains(_))) {
-                  throw new NoValidationTagsFoundWithinFirstNBytesException
-                }
+              if (totalProcessedLength > maxParsingSize) { //Stop parsing when the max parsing size was reached
+                stopParsing
               }
 
               if (totalProcessedLength == 0) { //Handle empty payload
                 throw new EmptyStreamError()
               }
+
               if (totalProcessedLength > maxPackageSize.getOrElse(Int.MaxValue)) { //Don't let users/hackers overload the system
-                throw new MaxSizeError()
+                throw MaxSizeError()
               }
+
             } else { //We parsed the beginning of the xml already, so let's just push the rest of the data through
               if (incompleteBytes.nonEmpty) { //if we have incompleteBytes we must send them out too, which can happen just after parsing was finished
                 incomingData = ByteString(incompleteBytes.toArray) ++ incomingData
@@ -155,6 +154,14 @@ object FastParsingStage {
               incomingData = incomingData.drop(incomingData.indexOf(OPENING_CHEVRON)) //Remove data that precedes the opening Chevron
               isFirstChunk = false
             }
+          }
+        }
+
+        private def stopParsing = {
+          continueParsing = false
+          parser.getInputFeeder.endOfInput()
+          if (instructions.collect { case v: XMLValidate => v }.exists(!completedInstructions.contains(_))) {
+            throw new NoValidationTagsFoundWithinFirstNBytesException
           }
         }
 
@@ -210,9 +217,8 @@ object FastParsingStage {
         /**
           * Move the altoo parser forward and process (Extract/Update/Delete/Insert/etc) the xml elements
           */
-        @tailrec
         private def advanceParser(): Unit = {
-          if (parser.hasNext) {
+          while (parser.hasNext) {
             val event = parser.next()
             val offset = totalProcessedLength - parsingData.length
             val (start, end) = getBounds(parser, offset)
@@ -222,22 +228,17 @@ object FastParsingStage {
 
               case XMLStreamConstants.START_ELEMENT =>
                 processXMLStartElement(start, end)
-                advanceParser()
 
               case XMLStreamConstants.END_ELEMENT =>
                 processXMLEndElement(start, end)
-                advanceParser()
 
               case XMLStreamConstants.CHARACTERS =>
                 processXMLCharacters(start, end)
-                advanceParser()
 
               case XMLStreamConstants.END_DOCUMENT =>
                 processXMLEndOfDocument()
-                advanceParser()
 
               case _ =>
-                advanceParser()
             }
           }
         }
