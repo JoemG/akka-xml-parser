@@ -24,6 +24,7 @@ import akka.util.ByteString
 import com.fasterxml.aalto.{AsyncByteArrayFeeder, AsyncXMLInputFactory, AsyncXMLStreamReader, WFCException}
 import com.fasterxml.aalto.stax.InputFactoryImpl
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
@@ -213,26 +214,34 @@ object FastParsingStage {
         /**
           * Move the altoo parser forward and process (Extract/Update/Delete/Insert/etc) the xml elements
           */
+        @tailrec
         private def advanceParser(): Unit = {
-          while (parser.hasNext) {
+          if (parser.hasNext) {
+            val event = parser.next()
             val offset = totalProcessedLength - parsingData.length
             val (start, end) = getBounds(parser, offset)
-
-            parser.next() match {
+            event match {
               case AsyncXMLStreamReader.EVENT_INCOMPLETE => //This will only happen at the end of the xml chunk
                 incompleteBytes ++= parsingData.slice(chunkOffset, parsingData.length)
 
               case XMLStreamConstants.START_ELEMENT =>
                 processXMLStartElement(start, end)
+                advanceParser()
 
               case XMLStreamConstants.END_ELEMENT =>
                 processXMLEndElement(start, end)
+                advanceParser()
 
               case XMLStreamConstants.CHARACTERS =>
                 processXMLCharacters(start, end)
+                advanceParser()
 
               case XMLStreamConstants.END_DOCUMENT =>
                 processXMLEndOfDocument()
+                advanceParser()
+
+              case _ =>
+                advanceParser()
             }
           }
         }
