@@ -23,12 +23,10 @@ import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.util.ByteString
 import com.fasterxml.aalto.{AsyncByteArrayFeeder, AsyncXMLInputFactory, AsyncXMLStreamReader, WFCException}
 import com.fasterxml.aalto.stax.InputFactoryImpl
-import uk.gov.hmrc.akka.xml.CompleteChunkStage.{OPENING_CHEVRON, STREAM_IS_EMPTY, STREAM_SIZE}
 
-import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * Parse an xml document as it is flowing through the system. By parsing we mean extracting/updating/deleting/validating certain elements
@@ -170,9 +168,7 @@ object FastParsingStage {
             if (continueParsing) { //Only parse the remaining bytes if they are required
               advanceParser()
             }
-            val requestedValidations= instructions.count(_.isInstanceOf[XMLValidate])
-            val completedValidations= completedInstructions.count(_.isInstanceOf[XMLValidate])
-            if (requestedValidations > 0 && completedValidations != requestedValidations) {  //Did we complete all given validation istructions
+            if (incompleteValidationInstructions(instructions.count(_.isInstanceOf[XMLValidate]), completedInstructions.count(_.isInstanceOf[XMLValidate]))) {
               throw new IncompleteXMLValidationException()
             }
           }.recover(recoverFromErrors)
@@ -219,10 +215,10 @@ object FastParsingStage {
           */
         private def advanceParser(): Unit = {
           while (parser.hasNext) {
-            val event = parser.next()
             val offset = totalProcessedLength - parsingData.length
             val (start, end) = getBounds(parser, offset)
-            event match {
+
+            parser.next() match {
               case AsyncXMLStreamReader.EVENT_INCOMPLETE => //This will only happen at the end of the xml chunk
                 incompleteBytes ++= parsingData.slice(chunkOffset, parsingData.length)
 
@@ -237,8 +233,6 @@ object FastParsingStage {
 
               case XMLStreamConstants.END_DOCUMENT =>
                 processXMLEndOfDocument()
-
-              case _ =>
             }
           }
         }
@@ -425,4 +419,7 @@ object FastParsingStage {
       }
   }
 
+  private def incompleteValidationInstructions(requestedValidations: Int, completedValidations: Int) = {
+    requestedValidations > 0 && completedValidations != requestedValidations
+  }
 }
