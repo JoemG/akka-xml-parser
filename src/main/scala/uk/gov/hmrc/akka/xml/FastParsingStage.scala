@@ -75,7 +75,6 @@ object FastParsingStage {
         private val feeder: AsyncXMLInputFactory = new InputFactoryImpl()
         private val parser: AsyncXMLStreamReader[AsyncByteArrayFeeder] = feeder.createAsyncFor(Array.empty)
         var parsingData = ByteString.empty //Store the data here for parsing
-        var isCharacterBuffering = false
         var chunkOffset = 0 //A pointer in the current data chunk
         var continueParsing = true //When we reached our parsing length/target we don't want to parse anymore
         var elementBlockExtracting: Boolean = false
@@ -299,7 +298,6 @@ object FastParsingStage {
           * Handle xml starting tags
           */
         private def processXMLEndElement(start: Int, end: Int): Unit = {
-          isCharacterBuffering = false
           instructions.diff(completedInstructions).foreach(f = (e: XMLInstruction) => {
             e match {
               case XMLExtract(`node`, _, false) =>
@@ -359,14 +357,12 @@ object FastParsingStage {
               case XMLExtract(`node`, _, false) =>
                 val t = parser.getText()
                 if (t.trim.length > 0) {
-                  isCharacterBuffering = true
                   bufferedText.append(t)
                 }
 
               case XMLExtract(_, _, true) if elementBlockExtracting =>
                 val t = parser.getText()
                 if (t.trim.length > 0) {
-                  isCharacterBuffering = true
                   elementBlock.append(t)
                 }
 
