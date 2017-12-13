@@ -142,7 +142,7 @@ object FastParsingStage {
                 throw new MaxSizeError()
               }
             } else { //We parsed the beginning of the xml already, so let's just push the rest of the data through
-              if (incompleteBytes.length > 0) { //if we have incompleteBytes we must send them out too, which can happen just after parsing was finished
+              if (incompleteBytes.nonEmpty) { //if we have incompleteBytes we must send them out too, which can happen just after parsing was finished
                 incomingData = ByteString(incompleteBytes.toArray) ++ incomingData
                 incompleteBytes.clear()
               }
