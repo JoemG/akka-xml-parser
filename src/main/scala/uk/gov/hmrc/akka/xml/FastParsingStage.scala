@@ -112,14 +112,10 @@ object FastParsingStage {
         def processPush(): Unit = {
           var incomingData = grab(in) //This is a var for a reason. We don't want to copy to another variable every time, when we only change it very few times
 
-          if (isFirstChunk && incomingData.length > 0) { //Remove any Byte Order Mark from the file
-            isFirstChunk = false
-            val openingChevronAt = incomingData.indexOf(OPENING_CHEVRON)
-            if (openingChevronAt > 0) { //This file stream has a BOM (Byte Order Mark) at the beginning or it is not xml
-              incomingData = incomingData.drop(openingChevronAt)
-            }
-          }
+          removeByteOrderMark()
+
           chunkOffset = 0
+
           Try {
             totalProcessedLength += incomingData.length //incompleteBytes were already added to the total length earlier
             if (continueParsing) { //We want to parse the beginning of an xml, and not the rest.
@@ -153,6 +149,14 @@ object FastParsingStage {
               push(out, (incomingData, Set.empty[XMLElement]))
             }
           }.recover(recoverFromErrors)
+
+          def removeByteOrderMark() = {
+            if (isFirstChunk && incomingData.nonEmpty) {
+              isFirstChunk = false
+              val openingChevronAt = incomingData.indexOf(OPENING_CHEVRON)
+              incomingData = incomingData.drop(openingChevronAt) //Remove data that precedes the opening Chevron
+            }
+          }
         }
 
         def processUpstreamFinish(): Unit = {
