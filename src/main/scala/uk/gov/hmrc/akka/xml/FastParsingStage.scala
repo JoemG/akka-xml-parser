@@ -152,9 +152,8 @@ object FastParsingStage {
 
           def removeByteOrderMark() = {
             if (isFirstChunk && incomingData.nonEmpty) {
+              incomingData = incomingData.drop(incomingData.indexOf(OPENING_CHEVRON)) //Remove data that precedes the opening Chevron
               isFirstChunk = false
-              val openingChevronAt = incomingData.indexOf(OPENING_CHEVRON)
-              incomingData = incomingData.drop(openingChevronAt) //Remove data that precedes the opening Chevron
             }
           }
         }
